@@ -11,11 +11,8 @@ Basic usage
 > users = Table("users", metadata, Column("name", String), Column("age", Real))
 > db = connect(engine)
 > createall(metadata, engine)
-> db(insert(users) |> values(name="Alice", age=27.3))
-> db(insert(users) |> values(name="Bob", age=45.1))
-> res = db(select([users]) |> where(users[:age] > 30))
-> fetchall(res)
-
-1-element Array{NamedTuples._NT_nameage{UTF8String,Float64},1}:
+> db(insert(users, name="Alice", age=27.3))
+> db(insert(users, name="Bob", age=45.1))
+> db(select([users]) |> where(users[:age] > 30)) |> fetchall
 (name => Bob, age => 45.1)
 ```

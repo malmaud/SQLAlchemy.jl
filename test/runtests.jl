@@ -1,9 +1,15 @@
-s=SQLAlchemy
-engine=s.create_engine("sqlite:///:memory:")
-metadata=s.MetaData()
-users=s.Table("Users", metadata, s.Column("name", s.SQLString()))
-s.create_all(metadata, engine)
-ins=s.insert(users) |> s.values(name="jon")
-conn=s.connect(engine)
-res=s.execute(conn,ins)
+using Base.Test
+using SQLAlchemy
 
+engine = createengine("sqlite:///:memory:")
+metadata = MetaData()
+users = Table("Users", metadata,
+            Column("name", SQLString()),
+            Column("age", SQLFloat()))
+createall(metadata, engine)
+db = connect(engine)
+db(insert(users), name="Alice", age=27)
+db(insert(users), name="Bob", age=31)
+res = db(select([users])) |> fetchall
+@test res[1][:name]|>get == "Alice"
+@test res[2][2]|>get == 31

@@ -5,10 +5,12 @@ using NamedTuples
 
 @pyimport sqlalchemy
 
-export Table, Column, Integer, String, MetaData, Engine
-export createengine, select, text, connect
-export createall, insert, values, compile, connect, execute, fetchone, fetchall, where, selectfrom, and, orderby, alias, join, groupby, having
+export Table, Column, MetaData, Engine
+export createengine, select, text, connect, func
+export createall, insert, values, compile, connect, execute, fetchone, fetchall, where, selectfrom, and, orderby, alias, join, groupby, having, delete, update, distinct, limit, offset, label
 export SQLString, SQLInteger, SQLBoolean, SQLDate, SQLDateTime, SQLEnum, SQLFloat, SQLInterval, SQLNumeric, SQLText, SQLTime, SQLUnicode, SQLUnicodeText
+
+include("record.jl")
 
 abstract Wrapped
 unwrap(x)=x
@@ -23,11 +25,13 @@ macro wrap_type(typename)
     quote
         immutable $(esc(typename)) <: Wrapped
             o::PyObject
+
             function $(esc(typename))(args...; kwargs...)
                 args = unwrap(args)
                 kwargs = unwrap_kw(kwargs)
                 new(sqlalchemy.$typename(args...; kwargs...))
             end
+
             function $(esc(typename))(o::PyObject)
                 new(o)
             end
@@ -44,6 +48,18 @@ end
 @wrap_type Select
 @wrap_type ResultProxy
 @wrap_type BinaryExpression
+@wrap_type Delete
+@wrap_type Update
+
+type SQLFunc <: Wrapped
+    o::PyObject
+end
+
+function func(name)
+    arg->SQLFunc(sqlalchemy.func[Symbol(name)][:__call__](unwrap(arg)))
+end
+
+func(name, arg) = func(name)(arg)
 
 function Base.call(c::Connection, args...; kwargs...)
     execute(c, args...; kwargs...)
@@ -52,7 +68,7 @@ end
 macro wrap_sql_type(typenames...)
     e = Expr(:block)
     for typename in typenames
-        sqlname = Symbol(string("SQL",typename))
+        sqlname = Symbol(string("SQL", typename))
         q = quote
             immutable $(esc(sqlname)) <: Wrapped
                 o::PyObject
@@ -72,7 +88,8 @@ end
 @wrap_sql_type String Integer Boolean Date DateTime Enum Float Interval Numeric Text Time Unicode UnicodeText
 
 
-for (jl_type, sql_type) in [(Integer, SQLInteger), (Bool, SQLBoolean), (Real, SQLFloat), (String, SQLString)]
+for (jl_type, sql_type) in [(Integer, SQLInteger), (Bool, SQLBoolean),
+                            (Real, SQLFloat), (String, SQLString)]
     unwrap{T<:jl_type}(::Type{T}) = unwrap(sql_type())
 end
 
@@ -90,7 +107,7 @@ macro define_method(typename, method, jlname, ret)
         end
 
         function $(esc(jlname))(args...; kwargs...)
-            arg->$method(arg, args...; kwargs...)
+            arg->$jlname(arg, args...; kwargs...)
         end
     end
 end
@@ -106,33 +123,6 @@ macro define_top(method, jlname, ret)
     end
 end
 
-# immutable Record <: Wrapped
-#     o :: PyObject
-# end
-
-# index_to_py(x::Number) = x+1
-# index_to_py(x) = x
-
-# function Base.getindex(r::Record, key)
-#     r.o[:__getitem__](index_to_py(key))
-# end
-
-function makerecord(pyo)
-    keys = pyo[:keys]()
-    vals = pyo[:values]()
-    e= :(@NT)
-    for (key, val) in zip(keys, vals)
-        push!(e.args, :($(Symbol(key))=>$val))
-    end
-    eval(e)
-end
-
-function makerecords(records)
-    res = map(makerecord, records)
-    isempty(res) && return res
-    convert(Vector{typeof(res[1])}, res)
-end
-
 @define_method MetaData create_all createall Other
 @define_method Table insert insert Insert
 @define_method Insert values Base.values Insert
@@ -145,9 +135,17 @@ end
 @define_method Select order_by orderby Select
 @define_method Select group_by groupby Select
 @define_method Select having having Select
+@define_method Select distinct distinct Select
+@define_method Select limit limit Select
+@define_method Select offset offset Select
 @define_method Table alias alias Other
-@define_method ResultProxy fetchone fetchone makerecord
-@define_method ResultProxy fetchall fetchall makerecords
+@define_method Table delete delete Delete
+@define_method Table update update Update
+@define_method ResultProxy fetchone fetchone Record
+@define_method ResultProxy fetchall fetchall RecordSet
+@define_method Delete where where Delete
+@define_method Update where where Update
+@define_method SQLFunc label label SQLFunc
 
 function Base.join(t1::Table, t2::Table; kwargs...)
     Select(t1.o[:join](t2; kwargs...))
@@ -167,11 +165,13 @@ end
 
 getindex(t::Table, column_name) = Column(unwrap(t)[:c][Symbol(column_name)])
 
-for (op, py_op) in zip([:(==), :(>), :(>=), :(<), :(<=), :(!=)], [:__eq__, :__gt__, :__ge__, :__lt__, :__le__, :__ne__])
+for (op, py_op) in zip([:(==), :(>), :(>=), :(<), :(<=), :(!=)],
+                       [:__eq__, :__gt__, :__ge__, :__lt__, :__le__, :__ne__])
     @eval function $op(c1::Column, c2::Union{Column, AbstractString, Number})
         BinaryExpression(unwrap(c1)[$(QuoteNode(py_op))](unwrap(c2)))
     end
 end
+
 
 
 end
