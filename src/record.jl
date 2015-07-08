@@ -1,10 +1,10 @@
 using PyCall
 
-const COLUMN_NAMES = Dict{UInt64, Vector{UTF8String}}()
+const COLUMN_NAMES = Dict{@compat(UInt64), Vector{UTF8String}}()
 
 immutable Record{T}
     fields::T
-    columns_idx::UInt64
+    columns_idx::@compat(UInt64)
 end
 column_names(r) = COLUMN_NAMES[r.columns_idx]
 Base.getindex(r::Record, idx::Integer) = r.fields[idx]
@@ -47,7 +47,7 @@ end
 
 immutable RecordSet
     records::Vector{Record}
-    columns_idx::UInt64
+    columns_idx::@compat(UInt64)
 end
 
 function Base.getindex(s::RecordSet, idx::Integer)

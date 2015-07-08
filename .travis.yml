@@ -5,7 +5,7 @@ julia:
   - release
   - nightly
 notifications:
-  email: false
+  email: true
 script:
   - julia -e 'Pkg.clone(pwd()); Pkg.build("SQLAlchemy"); Pkg.test("SQLAlchemy");'
 before_install:

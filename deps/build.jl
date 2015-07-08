@@ -19,10 +19,14 @@ end
     version = VersionNumber(m.captures[1])
     if version < v"1"
       info("Attempting to install sqlalchemy python package via pip")
-      run(`pip install --upgrade sqlalchemy`)
+      try
+        run(`pip install --upgrade sqlalchemy`)
+      catch
+        run(`sudo pip install --upgrade sqlalchemy`)
+      end
     end
   catch err
-    warn("Couldn't automatically install sqlalchemy. Run 'pip install sqlalchemy' manually.")
+    warn("Couldn't automatically install sqlalchemy. Run 'pip install sqlalchemy' manually.\nError was $err")
   end
 end
 
