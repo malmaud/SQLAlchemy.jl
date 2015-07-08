@@ -16,7 +16,7 @@ end
   try
     py_info = readall(`pip show sqlalchemy`)
     m = match(r"Version: (.*)", py_info)
-    version = VersionNumber(m.captures[1])
+    version = @compat VersionNumber(m.captures[1])
     if version < v"1"
       info("Attempting to install sqlalchemy python package via pip")
       try

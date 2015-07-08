@@ -1,6 +1,7 @@
 module SQLAlchemy
 
 using PyCall
+using Compat
 
 @pyimport sqlalchemy
 
