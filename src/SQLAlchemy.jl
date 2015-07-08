@@ -1,7 +1,6 @@
 module SQLAlchemy
 
 using PyCall
-using NamedTuples
 
 @pyimport sqlalchemy
 
