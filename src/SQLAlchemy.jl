@@ -16,7 +16,7 @@ include("chinook.jl")
 abstract Wrapped
 unwrap(x)=x
 unwrap(x::Wrapped)=x.o
-unwrap(x::Union{Tuple,Vector}) = map(unwrap, x)
+unwrap(x::Union(Tuple,Vector)) = map(unwrap, x)
 
 function unwrap_kw(x)
     [(_[1], unwrap(_[2])) for _ in x]
