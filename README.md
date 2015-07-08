@@ -19,6 +19,8 @@ Basic usage
 (name => Bob, age => 45.1)
 > records[1][:age] 
 Nullable(45.1)
+> typeof(records[1])
+SQLAlchemy.Record{Tuple{Nullable{UTF8String}, Nullable{Int64}}}
 ```
 
 More advanced querying
