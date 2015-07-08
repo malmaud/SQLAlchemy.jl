@@ -1,3 +1,6 @@
-julia 0.4-
+julia 0.3-
 PyCall
-NamedTuples
+BinDeps
+@osx Homebrew
+Compat
+

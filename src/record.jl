@@ -1,10 +1,10 @@
 using PyCall
 
-const COLUMN_NAMES = Dict{Int, Vector{UTF8String}}()
+const COLUMN_NAMES = Dict{UInt64, Vector{UTF8String}}()
 
 immutable Record{T}
     fields::T
-    columns_idx::Int
+    columns_idx::UInt64
 end
 column_names(r) = COLUMN_NAMES[r.columns_idx]
 Base.getindex(r::Record, idx::Integer) = r.fields[idx]
@@ -33,7 +33,7 @@ end
 function Record(pyo::PyObject)
     keys = pyo[:keys]()
     values = pyo[:values]()
-    idx = convert(Int, hash(keys))
+    idx = hash(keys)
     COLUMN_NAMES[idx] = keys
     for i in eachindex(values)
         if values[i] == nothing
@@ -47,7 +47,7 @@ end
 
 immutable RecordSet
     records::Vector{Record}
-    columns_idx::Int
+    columns_idx::UInt64
 end
 
 function Base.getindex(s::RecordSet, idx::Integer)
@@ -78,6 +78,6 @@ function Base.show(io::IO, rs::RecordSet)
         end
     end
     if length(rs.records) > limit
-        println(io, "...")
+        println(io, "\n...")
     end
 end

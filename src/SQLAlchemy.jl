@@ -7,10 +7,11 @@ using NamedTuples
 
 export Table, Column, MetaData, Engine
 export createengine, select, text, connect, func
-export createall, insert, values, compile, connect, execute, fetchone, fetchall, where, selectfrom, and, orderby, alias, join, groupby, having, delete, update, distinct, limit, offset, label
+export createall, insert, values, compile, connect, execute, fetchone, fetchall, where, selectfrom, and, orderby, alias, join, groupby, having, delete, update, distinct, limit, offset, label, loadchinook, desc, asc
 export SQLString, SQLInteger, SQLBoolean, SQLDate, SQLDateTime, SQLEnum, SQLFloat, SQLInterval, SQLNumeric, SQLText, SQLTime, SQLUnicode, SQLUnicodeText
 
 include("record.jl")
+include("chinook.jl")
 
 abstract Wrapped
 unwrap(x)=x
@@ -39,16 +40,17 @@ macro wrap_type(typename)
     end
 end
 
-@wrap_type Table
+@wrap_type BinaryExpression
 @wrap_type Column
-@wrap_type MetaData
+@wrap_type Connection
+@wrap_type Delete
 @wrap_type Engine
 @wrap_type Insert
-@wrap_type Connection
-@wrap_type Select
+@wrap_type MetaData
 @wrap_type ResultProxy
-@wrap_type BinaryExpression
-@wrap_type Delete
+@wrap_type Select
+@wrap_type Table
+@wrap_type UnaryExpression
 @wrap_type Update
 
 type SQLFunc <: Wrapped
@@ -102,8 +104,13 @@ macro define_method(typename, method, jlname, ret)
         function $(esc(jlname))(arg::$typename, args...; kwargs...)
             args = unwrap(args)
             kwargs = unwrap_kw(kwargs)
-            val = unwrap(arg)[$(QuoteNode(method))](args...; kwargs...)
-            $ret(val)
+            m = $(QuoteNode(method))
+            try
+                val = unwrap(arg)[$(QuoteNode(method))](args...; kwargs...)
+                $ret(val)
+            catch
+                x->$jlname(x, arg, args...; kwargs...)
+            end
         end
 
         function $(esc(jlname))(args...; kwargs...)
@@ -148,7 +155,7 @@ end
 @define_method SQLFunc label label SQLFunc
 
 function Base.join(t1::Table, t2::Table; kwargs...)
-    Select(t1.o[:join](t2; kwargs...))
+    Select(t1.o[:join](unwrap(t2); kwargs...))
 end
 
 function Base.print(io::IO, w::Wrapped)
@@ -162,6 +169,8 @@ end
 @define_top create_engine createengine Engine
 @define_top select Base.select Select
 @define_top text text Select
+@define_top desc desc UnaryExpression
+@define_top asc asc UnaryExpression
 
 getindex(t::Table, column_name) = Column(unwrap(t)[:c][Symbol(column_name)])
 
