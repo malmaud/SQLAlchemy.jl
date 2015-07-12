@@ -13,3 +13,5 @@ db(insert(users), name="Bob", age=31)
 res = db(select([users])) |> fetchall
 @test res[1][:name]|>get == "Alice"
 @test res[2][2]|>get == 31
+
+include("orm.jl")
