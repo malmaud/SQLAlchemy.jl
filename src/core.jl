@@ -45,15 +45,28 @@ end
 @wrap_type Table
 @wrap_type UnaryExpression
 @wrap_type Update
+@wrap_type ForeignKey
 
 type SQLFunc <: Wrapped
     o::PyObject
 end
 
-function func(name)
-    arg->SQLFunc(sqlalchemy[:func][Symbol(name)][:__call__](unwrap(arg)))
+type DelayedSQLFunc
+    name::Symbol
+    DelayedSQLFunc(name) = new(Symbol(name))
 end
 
+function Base.show(io::IO, d::DelayedSQLFunc)
+    print(io, d.name, "(...)")
+end
+
+function Base.call(d::DelayedSQLFunc, args...; kwargs...)
+    args = unwrap(args)
+    kwargs = unwrap_kw(kwargs)
+    SQLFunc(sqlalchemy[:func][d.name][:__call__](args...; kwargs...))
+end
+
+func(name) = DelayedSQLFunc(name)
 func(name, arg) = func(name)(arg)
 
 function Base.call(c::Connection, args...; kwargs...)
@@ -61,6 +74,7 @@ function Base.call(c::Connection, args...; kwargs...)
 end
 
 abstract SQLType <: Wrapped
+abstract JuliaType
 
 macro wrap_sql_type(typenames...)
     e = Expr(:block)
@@ -84,14 +98,52 @@ end
 
 @wrap_sql_type String Integer Boolean Date DateTime Enum Float Interval Numeric Text Time Unicode UnicodeText
 
+const jl_sql_type_map = Dict([(Int, SQLInteger), (Bool, SQLBoolean),
+                            (Float64, SQLFloat), (UTF8String, SQLString)])
 
-for (jl_type, sql_type) in [(Integer, SQLInteger), (Bool, SQLBoolean),
-                            (Real, SQLFloat), (String, SQLString)]
+
+for (jl_type, sql_type) in jl_sql_type_map
     unwrap{T<:jl_type}(::Type{T}) = unwrap(sql_type())
 end
 
+function Base.convert(::Type{JuliaType}, s::Wrapped)
+    if isa(s, ForeignKey) return Int end
+    for (k,v) in jl_sql_type_map
+        if isa(s, v) return k end
+    end
+    error("No corresponding Julia type for $s")
+end
+
+function Base.convert(::Type{SQLType}, s)
+    for (k,v) in jl_sql_type_map
+        if s <: k
+            return v()
+        end
+    end
+    error("No corresponding SQL type for $s")
+end
+
+
 immutable Other <: Wrapped
     o::PyObject
+end
+
+type DelayedFunction
+    args
+    kwargs
+    fname
+end
+
+function Base.show(io::IO, d::DelayedFunction)
+    print(io, d.fname, "(")
+    print(io, "_, ")
+    isempty(d.args) || print(io, join(d.args, ", "))
+    isempty(d.kwargs) || print(io, ";", join(d.kwargs, ", "))
+    print(io, ")")
+end
+
+function Base.call(d::DelayedFunction, arg::Wrapped)
+    d.fname(arg, d.args...; d.kwargs...)
 end
 
 macro define_method(typename, method, jlname, ret)
@@ -104,13 +156,13 @@ macro define_method(typename, method, jlname, ret)
                 val = unwrap(arg)[$(QuoteNode(method))](args...; kwargs...)
                 $ret(val)
             catch err
-                warn(err)
-                x->$jlname(x, arg, args...; kwargs...)
+                args = [arg, args...]
+                DelayedFunction(args, kwargs, $jlname)
             end
         end
 
         function $(esc(jlname))(args...; kwargs...)
-            arg->$jlname(arg, args...; kwargs...)
+            DelayedFunction(args, kwargs, $jlname)
         end
     end
 end
@@ -133,6 +185,7 @@ end
 @define_method Engine connect Base.connect Connection
 @define_method Connection execute execute ResultProxy
 @define_method Connection close Base.close identity
+@define_method Update where where Update
 @define_method Select where where Select
 @define_method Select select_from selectfrom Select
 @define_method Select and_ and Select
@@ -148,7 +201,7 @@ end
 @define_method ResultProxy fetchone fetchone Record
 @define_method ResultProxy fetchall fetchall RecordSet
 @define_method Delete where where Delete
-@define_method Update where where Update
+
 @define_method SQLFunc label label SQLFunc
 
 function Base.join(t1::Table, t2::Table; kwargs...)
